@@ -58,9 +58,7 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
 
-    has_users = db.query(User.id).first() is not None
-    role = "worker" if has_users else "admin"
-    user = User(username=username, password_hash=hash_password(payload.password), role=role)
+    user = User(username=username, password_hash=hash_password(payload.password), role=payload.role or "worker")
     db.add(user)
     db.commit()
     db.refresh(user)
