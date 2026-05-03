@@ -57,3 +57,29 @@ export type InventoryHistory = {
   created_at: string;
 };
 
+export type ActivityPoint = {
+  date: string;
+  count: number;
+};
+
+export type ActiveUserSummary = {
+  username: string;
+  count: number;
+};
+
+export type AnalyticsSummary = {
+  total_items: number;
+  total_units: number;
+  items_added_today: number;
+  items_added_this_week: number;
+  missing_count: number;
+  damaged_count: number;
+  resolved_count: number;
+  stowed_count: number;
+  status_counts: Record<string, number>;
+  department_counts: Record<string, number>;
+  recent_activity: AuditLog[];
+  top_active_users: ActiveUserSummary[];
+  daily_item_activity: ActivityPoint[];
+};
+

@@ -1,4 +1,4 @@
-import type { AuditLog, DashboardSummary, InventoryHistory, InventoryItem, InventoryPayload, User } from "./types";
+import type { AnalyticsSummary, AuditLog, DashboardSummary, InventoryHistory, InventoryItem, InventoryPayload, User } from "./types";
 
 const API_BASE = "https://inventory-system-production-dfa0.up.railway.app";
 const TOKEN_KEY = "warehouse_inventory_token";
@@ -54,6 +54,10 @@ export async function fetchCurrentUser() {
 
 export async function fetchDashboard() {
   return request<DashboardSummary>("/dashboard");
+}
+
+export async function fetchAnalytics() {
+  return request<AnalyticsSummary>("/analytics/summary");
 }
 
 export async function fetchItems(filters: Record<string, string>) {

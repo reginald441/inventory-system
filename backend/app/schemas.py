@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Literal
 
@@ -74,6 +76,16 @@ class DashboardSummary(BaseModel):
     by_department: dict[str, int]
 
 
+class ActivityPoint(BaseModel):
+    date: str
+    count: int
+
+
+class ActiveUserSummary(BaseModel):
+    username: str
+    count: int
+
+
 class AuditLogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -85,6 +97,22 @@ class AuditLogOut(BaseModel):
     old_value: str | None
     new_value: str | None
     created_at: datetime
+
+
+class AnalyticsSummary(BaseModel):
+    total_items: int
+    total_units: int
+    items_added_today: int
+    items_added_this_week: int
+    missing_count: int
+    damaged_count: int
+    resolved_count: int
+    stowed_count: int
+    status_counts: dict[str, int]
+    department_counts: dict[str, int]
+    recent_activity: list[AuditLogOut]
+    top_active_users: list[ActiveUserSummary]
+    daily_item_activity: list[ActivityPoint]
 
 
 class InventoryHistoryOut(BaseModel):

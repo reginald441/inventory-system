@@ -4,6 +4,7 @@ import {
   clearToken,
   createItem,
   deleteItem,
+  fetchAnalytics,
   fetchAuditLogs,
   fetchDashboard,
   fetchCurrentUser,
@@ -15,7 +16,7 @@ import {
   signup,
   updateItem
 } from "./api";
-import type { AuditLog, DashboardSummary, InventoryHistory, InventoryItem, InventoryPayload, InventoryStatus, User } from "./types";
+import type { AnalyticsSummary, AuditLog, DashboardSummary, InventoryHistory, InventoryItem, InventoryPayload, InventoryStatus, User } from "./types";
 
 const statuses: InventoryStatus[] = ["Received", "IOL", "Missing", "Damaged", "Resolved", "Stowed"];
 const departments = ["Receive", "IOL"] as const;
@@ -41,6 +42,7 @@ export function App() {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
   const [history, setHistory] = useState<InventoryHistory[]>([]);
@@ -58,9 +60,10 @@ export function App() {
   });
 
   async function loadData() {
-    const [userData, dashboardData, itemData] = await Promise.all([fetchCurrentUser(), fetchDashboard(), fetchItems(filters)]);
+    const [userData, dashboardData, analyticsData, itemData] = await Promise.all([fetchCurrentUser(), fetchDashboard(), fetchAnalytics(), fetchItems(filters)]);
     setCurrentUser(userData);
     setSummary(dashboardData);
+    setAnalytics(analyticsData);
     setItems(itemData);
     if (userData.role === "admin") {
       setAuditLogs(await fetchAuditLogs());
@@ -254,6 +257,70 @@ export function App() {
           </div>
         ))}
       </section>
+
+      {analytics && (
+        <section className="analytics-section">
+          <div className="section-title">
+            <PackageCheck size={20} />
+            <h2>Analytics</h2>
+          </div>
+          <div className="analytics-grid">
+            <div className="analytics-card">
+              <h3>Inventory Velocity</h3>
+              <div className="mini-metrics">
+                <span>Today <strong>{analytics.items_added_today}</strong></span>
+                <span>This Week <strong>{analytics.items_added_this_week}</strong></span>
+              </div>
+              <BarChart data={analytics.daily_item_activity.map((point) => ({ label: point.date.slice(5), value: point.count }))} />
+            </div>
+            {isAdmin && (
+              <div className="analytics-card">
+                <h3>Status Breakdown</h3>
+                <BarList data={Object.entries(analytics.status_counts).map(([label, value]) => ({ label, value }))} />
+              </div>
+            )}
+            {isAdmin && (
+              <div className="analytics-card">
+                <h3>Department Breakdown</h3>
+                <BarList data={Object.entries(analytics.department_counts).map(([label, value]) => ({ label, value }))} />
+              </div>
+            )}
+            {isAdmin && (
+              <div className="analytics-card">
+                <h3>Exceptions</h3>
+                <BarList
+                  data={[
+                    { label: "Missing", value: analytics.missing_count },
+                    { label: "Damaged", value: analytics.damaged_count },
+                    { label: "Resolved", value: analytics.resolved_count }
+                  ]}
+                />
+              </div>
+            )}
+            {isAdmin && (
+              <div className="analytics-card">
+                <h3>Recent Activity</h3>
+                <div className="activity-list">
+                  {analytics.recent_activity.map((log) => (
+                    <div className="activity-row" key={log.id}>
+                      <strong>{log.action}</strong>
+                      <span>{log.username} | Item {log.item_id ?? "-"}</span>
+                      <small>{new Date(log.created_at).toLocaleString()}</small>
+                    </div>
+                  ))}
+                  {analytics.recent_activity.length === 0 && <div className="empty compact">No recent activity.</div>}
+                </div>
+              </div>
+            )}
+            {isAdmin && (
+              <div className="analytics-card">
+                <h3>Top Active Users</h3>
+                <BarList data={analytics.top_active_users.map((user) => ({ label: user.username, value: user.count }))} />
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="workspace">
         <form className="item-form" onSubmit={handleSubmit}>
@@ -457,6 +524,43 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
       {label}
       <input value={value} onChange={(event) => onChange(event.target.value)} required />
     </label>
+  );
+}
+
+function BarList({ data }: { data: Array<{ label: string; value: number }> }) {
+  const maxValue = Math.max(...data.map((item) => item.value), 1);
+  return (
+    <div className="bar-list">
+      {data.map((item) => (
+        <div className="bar-row" key={item.label}>
+          <div className="bar-label">
+            <span>{item.label}</span>
+            <strong>{item.value}</strong>
+          </div>
+          <div className="bar-track">
+            <span style={{ width: `${Math.max((item.value / maxValue) * 100, item.value > 0 ? 8 : 0)}%` }} />
+          </div>
+        </div>
+      ))}
+      {data.length === 0 && <div className="empty compact">No data yet.</div>}
+    </div>
+  );
+}
+
+function BarChart({ data }: { data: Array<{ label: string; value: number }> }) {
+  const maxValue = Math.max(...data.map((item) => item.value), 1);
+  return (
+    <div className="column-chart">
+      {data.map((item) => (
+        <div className="column" key={item.label}>
+          <div className="column-track">
+            <span style={{ height: `${Math.max((item.value / maxValue) * 100, item.value > 0 ? 8 : 0)}%` }} />
+          </div>
+          <strong>{item.value}</strong>
+          <small>{item.label}</small>
+        </div>
+      ))}
+    </div>
   );
 }
 

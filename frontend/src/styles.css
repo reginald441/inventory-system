@@ -207,11 +207,16 @@ textarea:focus {
 
 .item-form,
 .table-section,
+.analytics-section,
 .audit-section {
   border: 1px solid #263343;
   background: rgba(18, 25, 35, 0.92);
   border-radius: 8px;
   padding: 18px;
+}
+
+.analytics-section {
+  margin-bottom: 18px;
 }
 
 .audit-section {
@@ -300,6 +305,145 @@ table {
   min-width: 1120px;
 }
 
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.analytics-card {
+  border: 1px solid #263343;
+  border-radius: 8px;
+  background: #101722;
+  padding: 16px;
+  min-height: 210px;
+}
+
+.analytics-card h3 {
+  margin: 0 0 14px;
+  font-size: 15px;
+}
+
+.mini-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.mini-metrics span {
+  border: 1px solid #29384a;
+  border-radius: 6px;
+  background: #121c28;
+  color: #9da9b8;
+  padding: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.mini-metrics strong {
+  display: block;
+  color: #eef4fa;
+  font-size: 22px;
+  margin-top: 4px;
+}
+
+.bar-list {
+  display: grid;
+  gap: 12px;
+}
+
+.bar-row {
+  display: grid;
+  gap: 6px;
+}
+
+.bar-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bar-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #1b2532;
+}
+
+.bar-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5cc8aa, #c69a4b);
+}
+
+.column-chart {
+  height: 145px;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  align-items: end;
+}
+
+.column {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  gap: 5px;
+  text-align: center;
+}
+
+.column-track {
+  height: 96px;
+  display: flex;
+  align-items: end;
+  border-radius: 6px;
+  background: #1b2532;
+  overflow: hidden;
+}
+
+.column-track span {
+  width: 100%;
+  background: linear-gradient(180deg, #5cc8aa, #2f7f70);
+}
+
+.column strong {
+  font-size: 12px;
+}
+
+.column small {
+  color: #8f9cad;
+  font-size: 11px;
+}
+
+.activity-list {
+  display: grid;
+  gap: 10px;
+}
+
+.activity-row {
+  display: grid;
+  gap: 3px;
+  border-bottom: 1px solid #263343;
+  padding-bottom: 9px;
+}
+
+.activity-row strong {
+  font-size: 13px;
+}
+
+.activity-row span,
+.activity-row small {
+  color: #9da9b8;
+  font-size: 12px;
+}
+
 .audit-section table {
   min-width: 980px;
 }
@@ -380,6 +524,10 @@ td {
   text-align: center;
   color: #8f9cad;
   padding: 34px;
+}
+
+.empty.compact {
+  padding: 12px;
 }
 
 .modal-backdrop {

@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 from .auth import authenticate_user, create_access_token, hash_password, require_admin, require_auth, require_worker_or_admin
 from .database import Base, engine, get_db
 from .models import AuditLog, InventoryHistory, InventoryItem, InventoryStatus, User
-from .schemas import AuditLogOut, DashboardSummary, InventoryCreate, InventoryHistoryOut, InventoryOut, InventoryUpdate, LoginRequest, SignupRequest, TokenResponse, UserOut, UserRoleUpdate
+from .schemas import AnalyticsSummary, AuditLogOut, DashboardSummary, InventoryCreate, InventoryHistoryOut, InventoryOut, InventoryUpdate, LoginRequest, SignupRequest, TokenResponse, UserOut, UserRoleUpdate
 
 Base.metadata.create_all(bind=engine)
 
@@ -153,6 +154,66 @@ def dashboard(_: User = Depends(require_worker_or_admin), db: Session = Depends(
         total_units=total_units,
         by_status={status_name: count for status_name, count in status_rows},
         by_department={department: count for department, count in department_rows},
+    )
+
+
+@app.get("/analytics/summary", response_model=AnalyticsSummary)
+def analytics_summary(current_user: User = Depends(require_worker_or_admin), db: Session = Depends(get_db)):
+    now = datetime.utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+    week_start = today_start - timedelta(days=today_start.weekday())
+    seven_day_start = today_start - timedelta(days=6)
+
+    total_items = db.query(func.count(InventoryItem.id)).scalar() or 0
+    total_units = db.query(func.coalesce(func.sum(InventoryItem.quantity), 0)).scalar() or 0
+    status_rows = db.query(InventoryItem.status, func.count(InventoryItem.id)).group_by(InventoryItem.status).all()
+    department_rows = db.query(InventoryItem.department, func.count(InventoryItem.id)).group_by(InventoryItem.department).all()
+    status_counts = {status_name: count for status_name, count in status_rows}
+    department_counts = {department: count for department, count in department_rows}
+
+    items_added_today = db.query(func.count(InventoryItem.id)).filter(InventoryItem.created_at >= today_start).scalar() or 0
+    items_added_this_week = db.query(func.count(InventoryItem.id)).filter(InventoryItem.created_at >= week_start).scalar() or 0
+
+    daily_rows = (
+        db.query(func.date(InventoryItem.created_at), func.count(InventoryItem.id))
+        .filter(InventoryItem.created_at >= seven_day_start)
+        .group_by(func.date(InventoryItem.created_at))
+        .all()
+    )
+    daily_counts = {str(day): count for day, count in daily_rows}
+    daily_item_activity = [
+        {"date": (seven_day_start + timedelta(days=offset)).date().isoformat(), "count": daily_counts.get((seven_day_start + timedelta(days=offset)).date().isoformat(), 0)}
+        for offset in range(7)
+    ]
+
+    if current_user.role == "admin":
+        recent_activity = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(10).all()
+        user_rows = (
+            db.query(AuditLog.username, func.count(AuditLog.id))
+            .group_by(AuditLog.username)
+            .order_by(func.count(AuditLog.id).desc())
+            .limit(5)
+            .all()
+        )
+        top_active_users = [{"username": username or "Unknown", "count": count} for username, count in user_rows]
+    else:
+        recent_activity = []
+        top_active_users = []
+
+    return AnalyticsSummary(
+        total_items=total_items,
+        total_units=total_units,
+        items_added_today=items_added_today,
+        items_added_this_week=items_added_this_week,
+        missing_count=status_counts.get("Missing", 0),
+        damaged_count=status_counts.get("Damaged", 0),
+        resolved_count=status_counts.get("Resolved", 0),
+        stowed_count=status_counts.get("Stowed", 0),
+        status_counts=status_counts,
+        department_counts=department_counts,
+        recent_activity=recent_activity,
+        top_active_users=top_active_users,
+        daily_item_activity=daily_item_activity,
     )
 
 
