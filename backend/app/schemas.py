@@ -73,3 +73,28 @@ class DashboardSummary(BaseModel):
     by_status: dict[str, int]
     by_department: dict[str, int]
 
+
+class AuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    action: str
+    item_id: int | None
+    user_id: int | None
+    username: str
+    old_value: str | None
+    new_value: str | None
+    created_at: datetime
+
+
+class InventoryHistoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    item_id: int
+    status: str
+    location: str
+    notes: str
+    changed_by_user_id: int | None
+    created_at: datetime
+

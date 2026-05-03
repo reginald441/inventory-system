@@ -36,3 +36,24 @@ export type DashboardSummary = {
   by_department: Record<string, number>;
 };
 
+export type AuditLog = {
+  id: number;
+  action: string;
+  item_id: number | null;
+  user_id: number | null;
+  username: string;
+  old_value: string | null;
+  new_value: string | null;
+  created_at: string;
+};
+
+export type InventoryHistory = {
+  id: number;
+  item_id: number;
+  status: string;
+  location: string;
+  notes: string;
+  changed_by_user_id: number | null;
+  created_at: string;
+};
+

@@ -50,3 +50,28 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     inventory_items: Mapped[list[InventoryItem]] = relationship(back_populates="created_by")
 
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    action: Mapped[str] = mapped_column(String(80), index=True)
+    item_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    username: Mapped[str] = mapped_column(String(80), default="")
+    old_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class InventoryHistory(Base):
+    __tablename__ = "inventory_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    item_id: Mapped[int] = mapped_column(Integer, index=True)
+    status: Mapped[str] = mapped_column(String(40), index=True)
+    location: Mapped[str] = mapped_column(String(80), index=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    changed_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+

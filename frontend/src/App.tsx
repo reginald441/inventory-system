@@ -4,8 +4,10 @@ import {
   clearToken,
   createItem,
   deleteItem,
+  fetchAuditLogs,
   fetchDashboard,
   fetchCurrentUser,
+  fetchItemHistory,
   fetchItems,
   getToken,
   login,
@@ -13,7 +15,7 @@ import {
   signup,
   updateItem
 } from "./api";
-import type { DashboardSummary, InventoryItem, InventoryPayload, InventoryStatus, User } from "./types";
+import type { AuditLog, DashboardSummary, InventoryHistory, InventoryItem, InventoryPayload, InventoryStatus, User } from "./types";
 
 const statuses: InventoryStatus[] = ["Received", "IOL", "Missing", "Damaged", "Resolved", "Stowed"];
 const departments = ["Receive", "IOL"] as const;
@@ -39,6 +41,10 @@ export function App() {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
+  const [history, setHistory] = useState<InventoryHistory[]>([]);
+  const [historyError, setHistoryError] = useState("");
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [form, setForm] = useState<InventoryPayload>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -56,6 +62,11 @@ export function App() {
     setCurrentUser(userData);
     setSummary(dashboardData);
     setItems(itemData);
+    if (userData.role === "admin") {
+      setAuditLogs(await fetchAuditLogs());
+    } else {
+      setAuditLogs([]);
+    }
   }
 
   useEffect(() => {
@@ -124,6 +135,17 @@ export function App() {
     if (!window.confirm("Delete this inventory item?")) return;
     await deleteItem(id);
     await loadData();
+  }
+
+  async function openHistory(item: InventoryItem) {
+    setHistoryItem(item);
+    setHistory([]);
+    setHistoryError("");
+    try {
+      setHistory(await fetchItemHistory(item.id));
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : "Unable to load history");
+    }
   }
 
   function exportCsv() {
@@ -324,7 +346,7 @@ export function App() {
                   <th>Dept</th>
                   <th>Status</th>
                   <th>Created By</th>
-                  <th>Updated</th>
+                  <th>Last Updated</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -343,6 +365,7 @@ export function App() {
                     <td>{item.created_by_username ?? "Unknown"}</td>
                     <td>{new Date(item.updated_at).toLocaleString()}</td>
                     <td className="row-actions">
+                      <button title="History" className="icon-button" onClick={() => openHistory(item)}><Search size={16} /></button>
                       {isAdmin && <button title="Edit" className="icon-button" onClick={() => startEdit(item)}><Pencil size={16} /></button>}
                       {isAdmin && <button title="Delete" className="icon-button danger" onClick={() => removeItem(item.id)}><Trash2 size={16} /></button>}
                     </td>
@@ -358,6 +381,72 @@ export function App() {
           </div>
         </section>
       </section>
+
+      {isAdmin && (
+        <section className="audit-section">
+          <div className="section-title">
+            <PackageCheck size={20} />
+            <h2>Audit Logs</h2>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th>Item</th>
+                  <th>User</th>
+                  <th>Old Value</th>
+                  <th>New Value</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditLogs.map((log) => (
+                  <tr key={log.id}>
+                    <td>{log.action}</td>
+                    <td>{log.item_id ?? "-"}</td>
+                    <td>{log.username}</td>
+                    <td className="log-value">{log.old_value ?? ""}</td>
+                    <td className="log-value">{log.new_value ?? ""}</td>
+                    <td>{new Date(log.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+                {auditLogs.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="empty">No audit logs yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {historyItem && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setHistoryItem(null)}>
+          <section className="history-modal" role="dialog" aria-modal="true" aria-label="Item history" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-title">
+              <div>
+                <div className="eyebrow">Item History</div>
+                <h2>{historyItem.asin} | {historyItem.lpn}</h2>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => setHistoryItem(null)}>Close</button>
+            </div>
+            {historyError && <div className="error">{historyError}</div>}
+            <div className="history-list">
+              {history.map((entry) => (
+                <div className="history-entry" key={entry.id}>
+                  <strong>{entry.status}</strong>
+                  <span>{entry.location}</span>
+                  <p>{entry.notes || "No notes"}</p>
+                  <small>{new Date(entry.created_at).toLocaleString()}</small>
+                </div>
+              ))}
+              {history.length === 0 && !historyError && <div className="empty">No history recorded for this item.</div>}
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

@@ -1,3 +1,5 @@
+import json
+
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, inspect, or_, text
@@ -5,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from .auth import authenticate_user, create_access_token, hash_password, require_admin, require_auth, require_worker_or_admin
 from .database import Base, engine, get_db
-from .models import InventoryItem, InventoryStatus, User
-from .schemas import DashboardSummary, InventoryCreate, InventoryOut, InventoryUpdate, LoginRequest, SignupRequest, TokenResponse, UserOut, UserRoleUpdate
+from .models import AuditLog, InventoryHistory, InventoryItem, InventoryStatus, User
+from .schemas import AuditLogOut, DashboardSummary, InventoryCreate, InventoryHistoryOut, InventoryOut, InventoryUpdate, LoginRequest, SignupRequest, TokenResponse, UserOut, UserRoleUpdate
 
 Base.metadata.create_all(bind=engine)
 
@@ -32,6 +34,59 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def item_snapshot(item: InventoryItem) -> dict[str, object]:
+    return {
+        "id": item.id,
+        "asin": item.asin,
+        "sku": item.sku,
+        "lpn": item.lpn,
+        "tote_id": item.tote_id,
+        "quantity": item.quantity,
+        "condition": item.condition,
+        "location": item.location,
+        "department": item.department,
+        "status": item.status,
+        "notes": item.notes,
+    }
+
+
+def dump_value(value: object) -> str:
+    return json.dumps(value, default=str, sort_keys=True)
+
+
+def add_audit_log(
+    db: Session,
+    *,
+    action: str,
+    user: User,
+    item_id: int | None,
+    old_value: object | None = None,
+    new_value: object | None = None,
+) -> None:
+    db.add(
+        AuditLog(
+            action=action,
+            item_id=item_id,
+            user_id=user.id,
+            username=user.username,
+            old_value=dump_value(old_value) if old_value is not None else None,
+            new_value=dump_value(new_value) if new_value is not None else None,
+        )
+    )
+
+
+def add_history(db: Session, *, item: InventoryItem, user: User) -> None:
+    db.add(
+        InventoryHistory(
+            item_id=item.id,
+            status=item.status,
+            location=item.location,
+            notes=item.notes,
+            changed_by_user_id=user.id,
+        )
+    )
 
 
 @app.get("/health")
@@ -70,7 +125,7 @@ def me(current_user: User = Depends(require_auth)):
     return current_user
 
 
-@app.patch("/users/{user_id}/role", response_model=UserOut)
+@app.put("/users/{user_id}/role", response_model=UserOut)
 def update_user_role(
     user_id: int,
     payload: UserRoleUpdate,
@@ -144,32 +199,66 @@ def list_items(
 def create_item(payload: InventoryCreate, current_user: User = Depends(require_worker_or_admin), db: Session = Depends(get_db)):
     item = InventoryItem(**payload.model_dump(), created_by_user_id=current_user.id)
     db.add(item)
+    db.flush()
+    add_audit_log(db, action="Create item", user=current_user, item_id=item.id, new_value=item_snapshot(item))
+    add_history(db, item=item, user=current_user)
     db.commit()
     db.refresh(item)
     return item
 
 
 @app.put("/items/{item_id}", response_model=InventoryOut)
-def update_item(item_id: int, payload: InventoryUpdate, _: User = Depends(require_admin), db: Session = Depends(get_db)):
+def update_item(item_id: int, payload: InventoryUpdate, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
     item = db.get(InventoryItem, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
 
+    old_snapshot = item_snapshot(item)
+    old_status = item.status
+    old_location = item.location
     for key, value in payload.model_dump().items():
         setattr(item, key, value)
+    db.flush()
+    new_snapshot = item_snapshot(item)
+    add_audit_log(db, action="Update item", user=current_user, item_id=item.id, old_value=old_snapshot, new_value=new_snapshot)
+    if old_status != item.status:
+        add_audit_log(
+            db,
+            action="Status change",
+            user=current_user,
+            item_id=item.id,
+            old_value={"status": old_status},
+            new_value={"status": item.status},
+        )
+    if old_status != item.status or old_location != item.location:
+        add_history(db, item=item, user=current_user)
     db.commit()
     db.refresh(item)
     return item
 
 
 @app.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_item(item_id: int, _: User = Depends(require_admin), db: Session = Depends(get_db)):
+def delete_item(item_id: int, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
     item = db.get(InventoryItem, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    add_audit_log(db, action="Delete item", user=current_user, item_id=item.id, old_value=item_snapshot(item))
     db.delete(item)
     db.commit()
     return None
+
+
+@app.get("/audit-logs", response_model=list[AuditLogOut])
+def audit_logs(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return db.query(AuditLog).order_by(AuditLog.created_at.desc()).all()
+
+
+@app.get("/items/{item_id}/history", response_model=list[InventoryHistoryOut])
+def item_history(item_id: int, _: User = Depends(require_worker_or_admin), db: Session = Depends(get_db)):
+    item = db.get(InventoryItem, item_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    return db.query(InventoryHistory).filter(InventoryHistory.item_id == item_id).order_by(InventoryHistory.created_at.desc()).all()
 
 
 @app.get("/meta/statuses", response_model=list[str])

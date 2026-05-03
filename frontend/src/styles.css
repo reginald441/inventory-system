@@ -206,11 +206,16 @@ textarea:focus {
 }
 
 .item-form,
-.table-section {
+.table-section,
+.audit-section {
   border: 1px solid #263343;
   background: rgba(18, 25, 35, 0.92);
   border-radius: 8px;
   padding: 18px;
+}
+
+.audit-section {
+  margin-top: 18px;
 }
 
 .section-title {
@@ -295,6 +300,10 @@ table {
   min-width: 1120px;
 }
 
+.audit-section table {
+  min-width: 980px;
+}
+
 th,
 td {
   text-align: left;
@@ -360,10 +369,79 @@ td {
   gap: 8px;
 }
 
+.log-value {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .empty {
   text-align: center;
   color: #8f9cad;
   padding: 34px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 12, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 20;
+}
+
+.history-modal {
+  width: min(720px, 100%);
+  max-height: min(720px, 90vh);
+  overflow: auto;
+  border: 1px solid #304054;
+  background: #121923;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.44);
+}
+
+.modal-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.modal-title h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.history-entry {
+  border: 1px solid #263343;
+  border-radius: 8px;
+  background: #101722;
+  padding: 13px;
+}
+
+.history-entry strong,
+.history-entry span,
+.history-entry small {
+  display: block;
+}
+
+.history-entry span,
+.history-entry small {
+  color: #9da9b8;
+}
+
+.history-entry p {
+  margin: 8px 0;
+  color: #dce5ee;
 }
 
 @media (max-width: 1050px) {
