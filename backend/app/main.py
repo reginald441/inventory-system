@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from .auth import authenticate_user, create_access_token, hash_password, require_admin, require_auth, require_worker_or_admin
 from .database import Base, engine, get_db
 from .models import InventoryItem, InventoryStatus, User
-from .schemas import DashboardSummary, InventoryCreate, InventoryOut, InventoryUpdate, LoginRequest, SignupRequest, TokenResponse, UserOut
+from .schemas import DashboardSummary, InventoryCreate, InventoryOut, InventoryUpdate, LoginRequest, SignupRequest, TokenResponse, UserOut, UserRoleUpdate
 
 Base.metadata.create_all(bind=engine)
 
@@ -58,7 +58,7 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
 
-    user = User(username=username, password_hash=hash_password(payload.password), role=payload.role or "worker")
+    user = User(username=username, password_hash=hash_password(payload.password), role="worker")
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -68,6 +68,22 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
 @app.get("/auth/me", response_model=UserOut)
 def me(current_user: User = Depends(require_auth)):
     return current_user
+
+
+@app.patch("/users/{user_id}/role", response_model=UserOut)
+def update_user_role(
+    user_id: int,
+    payload: UserRoleUpdate,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user.role = payload.role
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @app.get("/dashboard", response_model=DashboardSummary)

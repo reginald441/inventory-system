@@ -14,7 +14,11 @@ class LoginRequest(BaseModel):
 
 
 class SignupRequest(LoginRequest):
-    role: RoleLiteral = "worker"
+    pass
+
+
+class UserRoleUpdate(BaseModel):
+    role: RoleLiteral
 
 
 class UserOut(BaseModel):

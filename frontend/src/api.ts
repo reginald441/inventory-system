@@ -1,4 +1,4 @@
-import type { DashboardSummary, InventoryItem, InventoryPayload, User, UserRole } from "./types";
+import type { DashboardSummary, InventoryItem, InventoryPayload, User } from "./types";
 
 const API_BASE = "https://inventory-system-production-dfa0.up.railway.app";
 const TOKEN_KEY = "warehouse_inventory_token";
@@ -41,10 +41,10 @@ export async function login(username: string, password: string) {
   });
 }
 
-export async function signup(username: string, password: string, role: UserRole = "worker") {
+export async function signup(username: string, password: string) {
   return request<{ access_token: string; token_type: string; user: User }>("/auth/signup", {
     method: "POST",
-    body: JSON.stringify({ username, password, role })
+    body: JSON.stringify({ username, password })
   });
 }
 
