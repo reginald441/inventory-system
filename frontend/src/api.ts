@@ -1,6 +1,6 @@
 import type { DashboardSummary, InventoryItem, InventoryPayload } from "./types";
 
-const API_BASE = "/api";
+const API_BASE = "https://inventory-system-production-dfa0.up.railway.app";
 const TOKEN_KEY = "warehouse_inventory_token";
 
 export function getToken() {
