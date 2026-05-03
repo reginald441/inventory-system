@@ -1,14 +1,27 @@
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, or_
+from sqlalchemy import func, inspect, or_, text
 from sqlalchemy.orm import Session
 
-from .auth import authenticate_user, create_access_token, require_auth
+from .auth import authenticate_user, create_access_token, hash_password, require_admin, require_auth, require_worker_or_admin
 from .database import Base, engine, get_db
-from .models import InventoryItem, InventoryStatus
-from .schemas import DashboardSummary, InventoryCreate, InventoryOut, InventoryUpdate, LoginRequest, TokenResponse
+from .models import InventoryItem, InventoryStatus, User
+from .schemas import DashboardSummary, InventoryCreate, InventoryOut, InventoryUpdate, LoginRequest, SignupRequest, TokenResponse, UserOut
 
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_runtime_schema() -> None:
+    inspector = inspect(engine)
+    if "inventory_items" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("inventory_items")}
+    if "created_by_user_id" not in columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE inventory_items ADD COLUMN created_by_user_id INTEGER"))
+
+
+ensure_runtime_schema()
 
 app = FastAPI(title="Warehouse Inventory Tracking API", version="1.0.0")
 
@@ -27,14 +40,40 @@ def health_check():
 
 
 @app.post("/auth/login", response_model=TokenResponse)
-def login(payload: LoginRequest):
-    if not authenticate_user(payload.username, payload.password):
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    user = authenticate_user(db, payload.username, payload.password)
+    if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
-    return TokenResponse(access_token=create_access_token(payload.username))
+    return TokenResponse(access_token=create_access_token(user), user=user)
+
+
+@app.post("/auth/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def signup(payload: SignupRequest, db: Session = Depends(get_db)):
+    username = payload.username.strip()
+    if not username:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username is required")
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 8 characters")
+    existing_user = db.query(User).filter(User.username == username).first()
+    if existing_user:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
+
+    has_users = db.query(User.id).first() is not None
+    role = "worker" if has_users else "admin"
+    user = User(username=username, password_hash=hash_password(payload.password), role=role)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return TokenResponse(access_token=create_access_token(user), user=user)
+
+
+@app.get("/auth/me", response_model=UserOut)
+def me(current_user: User = Depends(require_auth)):
+    return current_user
 
 
 @app.get("/dashboard", response_model=DashboardSummary)
-def dashboard(_: str = Depends(require_auth), db: Session = Depends(get_db)):
+def dashboard(_: User = Depends(require_worker_or_admin), db: Session = Depends(get_db)):
     total_items = db.query(func.count(InventoryItem.id)).scalar() or 0
     total_units = db.query(func.coalesce(func.sum(InventoryItem.quantity), 0)).scalar() or 0
     status_rows = db.query(InventoryItem.status, func.count(InventoryItem.id)).group_by(InventoryItem.status).all()
@@ -55,7 +94,7 @@ def list_items(
     department: str | None = Query(default=None),
     condition: str | None = Query(default=None),
     location: str | None = Query(default=None),
-    _: str = Depends(require_auth),
+    _: User = Depends(require_worker_or_admin),
     db: Session = Depends(get_db),
 ):
     query = db.query(InventoryItem)
@@ -88,8 +127,8 @@ def list_items(
 
 
 @app.post("/items", response_model=InventoryOut, status_code=status.HTTP_201_CREATED)
-def create_item(payload: InventoryCreate, _: str = Depends(require_auth), db: Session = Depends(get_db)):
-    item = InventoryItem(**payload.model_dump())
+def create_item(payload: InventoryCreate, current_user: User = Depends(require_worker_or_admin), db: Session = Depends(get_db)):
+    item = InventoryItem(**payload.model_dump(), created_by_user_id=current_user.id)
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -97,7 +136,7 @@ def create_item(payload: InventoryCreate, _: str = Depends(require_auth), db: Se
 
 
 @app.put("/items/{item_id}", response_model=InventoryOut)
-def update_item(item_id: int, payload: InventoryUpdate, _: str = Depends(require_auth), db: Session = Depends(get_db)):
+def update_item(item_id: int, payload: InventoryUpdate, _: User = Depends(require_admin), db: Session = Depends(get_db)):
     item = db.get(InventoryItem, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
@@ -110,7 +149,7 @@ def update_item(item_id: int, payload: InventoryUpdate, _: str = Depends(require
 
 
 @app.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_item(item_id: int, _: str = Depends(require_auth), db: Session = Depends(get_db)):
+def delete_item(item_id: int, _: User = Depends(require_admin), db: Session = Depends(get_db)):
     item = db.get(InventoryItem, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
@@ -120,6 +159,6 @@ def delete_item(item_id: int, _: str = Depends(require_auth), db: Session = Depe
 
 
 @app.get("/meta/statuses", response_model=list[str])
-def statuses(_: str = Depends(require_auth)):
+def statuses(_: User = Depends(require_worker_or_admin)):
     return [status_item.value for status_item in InventoryStatus]
 

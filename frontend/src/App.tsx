@@ -5,13 +5,15 @@ import {
   createItem,
   deleteItem,
   fetchDashboard,
+  fetchCurrentUser,
   fetchItems,
   getToken,
   login,
   setToken,
+  signup,
   updateItem
 } from "./api";
-import type { DashboardSummary, InventoryItem, InventoryPayload, InventoryStatus } from "./types";
+import type { DashboardSummary, InventoryItem, InventoryPayload, InventoryStatus, User } from "./types";
 
 const statuses: InventoryStatus[] = ["Received", "IOL", "Missing", "Damaged", "Resolved", "Stowed"];
 const departments = ["Receive", "IOL"] as const;
@@ -31,8 +33,10 @@ const emptyForm: InventoryPayload = {
 
 export function App() {
   const [tokenReady, setTokenReady] = useState(Boolean(getToken()));
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -48,7 +52,8 @@ export function App() {
   });
 
   async function loadData() {
-    const [dashboardData, itemData] = await Promise.all([fetchDashboard(), fetchItems(filters)]);
+    const [userData, dashboardData, itemData] = await Promise.all([fetchCurrentUser(), fetchDashboard(), fetchItems(filters)]);
+    setCurrentUser(userData);
     setSummary(dashboardData);
     setItems(itemData);
   }
@@ -59,6 +64,7 @@ export function App() {
         setMessage(error.message);
         if (error.message === "Invalid token") {
           clearToken();
+          setCurrentUser(null);
           setTokenReady(false);
         }
       });
@@ -69,11 +75,12 @@ export function App() {
     event.preventDefault();
     setAuthError("");
     try {
-      const response = await login(username, password);
+      const response = authMode === "login" ? await login(username, password) : await signup(username, password);
       setToken(response.access_token);
+      setCurrentUser(response.user);
       setTokenReady(true);
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Login failed");
+      setAuthError(error instanceof Error ? error.message : `${authMode === "login" ? "Login" : "Signup"} failed`);
     }
   }
 
@@ -97,6 +104,7 @@ export function App() {
   }
 
   function startEdit(item: InventoryItem) {
+    if (currentUser?.role !== "admin") return;
     setEditingId(item.id);
     setForm({
       asin: item.asin,
@@ -119,7 +127,7 @@ export function App() {
   }
 
   function exportCsv() {
-    const headers = ["ID", "ASIN", "SKU", "LPN", "Tote ID", "Quantity", "Condition", "Location", "Department", "Status", "Notes", "Created", "Updated"];
+    const headers = ["ID", "ASIN", "SKU", "LPN", "Tote ID", "Quantity", "Condition", "Location", "Department", "Status", "Notes", "Created By", "Created", "Updated"];
     const rows = items.map((item) => [
       item.id,
       item.asin,
@@ -132,6 +140,7 @@ export function App() {
       item.department,
       item.status,
       item.notes,
+      item.created_by_username ?? "",
       item.created_at,
       item.updated_at
     ]);
@@ -148,6 +157,7 @@ export function App() {
   }
 
   const statusCards = useMemo(() => statuses.map((status) => ({ status, count: summary?.by_status[status] ?? 0 })), [summary]);
+  const isAdmin = currentUser?.role === "admin";
 
   if (!tokenReady) {
     return (
@@ -165,10 +175,20 @@ export function App() {
             </label>
             <label>
               Password
-              <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
+              <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete={authMode === "login" ? "current-password" : "new-password"} />
             </label>
             {authError && <div className="error">{authError}</div>}
-            <button className="primary-button" type="submit">Sign in</button>
+            <button className="primary-button" type="submit">{authMode === "login" ? "Sign in" : "Create account"}</button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                setAuthError("");
+                setAuthMode(authMode === "login" ? "signup" : "login");
+              }}
+            >
+              {authMode === "login" ? "Create account" : "Back to sign in"}
+            </button>
           </form>
         </section>
       </main>
@@ -181,12 +201,14 @@ export function App() {
         <div>
           <div className="eyebrow">Receive / IOL</div>
           <h1>Inventory Tracking System</h1>
+          {currentUser && <p className="user-chip">{currentUser.username} | {currentUser.role}</p>}
         </div>
         <button
           className="icon-button"
           title="Sign out"
           onClick={() => {
             clearToken();
+            setCurrentUser(null);
             setTokenReady(false);
           }}
         >
@@ -301,6 +323,7 @@ export function App() {
                   <th>Location</th>
                   <th>Dept</th>
                   <th>Status</th>
+                  <th>Created By</th>
                   <th>Updated</th>
                   <th>Actions</th>
                 </tr>
@@ -317,16 +340,17 @@ export function App() {
                     <td>{item.location}</td>
                     <td>{item.department}</td>
                     <td><span className={`pill ${item.status.toLowerCase()}`}>{item.status}</span></td>
+                    <td>{item.created_by_username ?? "Unknown"}</td>
                     <td>{new Date(item.updated_at).toLocaleString()}</td>
                     <td className="row-actions">
-                      <button title="Edit" className="icon-button" onClick={() => startEdit(item)}><Pencil size={16} /></button>
-                      <button title="Delete" className="icon-button danger" onClick={() => removeItem(item.id)}><Trash2 size={16} /></button>
+                      {isAdmin && <button title="Edit" className="icon-button" onClick={() => startEdit(item)}><Pencil size={16} /></button>}
+                      {isAdmin && <button title="Delete" className="icon-button danger" onClick={() => removeItem(item.id)}><Trash2 size={16} /></button>}
                     </td>
                   </tr>
                 ))}
                 {items.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="empty">No inventory records match the current filters.</td>
+                    <td colSpan={12} className="empty">No inventory records match the current filters.</td>
                   </tr>
                 )}
               </tbody>

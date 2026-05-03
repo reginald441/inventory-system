@@ -1,4 +1,4 @@
-import type { DashboardSummary, InventoryItem, InventoryPayload } from "./types";
+import type { DashboardSummary, InventoryItem, InventoryPayload, User } from "./types";
 
 const API_BASE = "https://inventory-system-production-dfa0.up.railway.app";
 const TOKEN_KEY = "warehouse_inventory_token";
@@ -35,10 +35,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export async function login(username: string, password: string) {
-  return request<{ access_token: string; token_type: string }>("/auth/login", {
+  return request<{ access_token: string; token_type: string; user: User }>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ username, password })
   });
+}
+
+export async function signup(username: string, password: string) {
+  return request<{ access_token: string; token_type: string; user: User }>("/auth/signup", {
+    method: "POST",
+    body: JSON.stringify({ username, password })
+  });
+}
+
+export async function fetchCurrentUser() {
+  return request<User>("/auth/me");
 }
 
 export async function fetchDashboard() {

@@ -158,6 +158,14 @@ textarea:focus {
   margin-bottom: 6px;
 }
 
+.user-chip {
+  margin: 8px 0 0;
+  color: #aeb9c7;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));

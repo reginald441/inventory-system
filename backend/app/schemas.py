@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 StatusLiteral = Literal["Received", "IOL", "Missing", "Damaged", "Resolved", "Stowed"]
 DepartmentLiteral = Literal["Receive", "IOL"]
+RoleLiteral = Literal["admin", "worker"]
 
 
 class LoginRequest(BaseModel):
@@ -12,9 +13,23 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class SignupRequest(LoginRequest):
+    role: RoleLiteral = "worker"
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    role: RoleLiteral
+    created_at: datetime
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user: UserOut
 
 
 class InventoryBase(BaseModel):
@@ -42,6 +57,8 @@ class InventoryOut(InventoryBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    created_by_user_id: int | None = None
+    created_by_username: str | None = None
     created_at: datetime
     updated_at: datetime
 
