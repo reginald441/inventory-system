@@ -44,7 +44,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = authenticate_user(db, payload.username, payload.password)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
-    return TokenResponse(access_token=create_access_token(user), user=user)
+    return TokenResponse(access_token=create_access_token(user), user=UserOut.model_validate(user))
 
 
 @app.post("/auth/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -62,7 +62,7 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return TokenResponse(access_token=create_access_token(user), user=user)
+    return TokenResponse(access_token=create_access_token(user), user=UserOut.model_validate(user))
 
 
 @app.get("/auth/me", response_model=UserOut)
