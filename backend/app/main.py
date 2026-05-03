@@ -27,7 +27,7 @@ app = FastAPI(title="Warehouse Inventory Tracking API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://inventory-system-seven-inky.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

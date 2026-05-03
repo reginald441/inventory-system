@@ -13,7 +13,7 @@ import {
   signup,
   updateItem
 } from "./api";
-import type { DashboardSummary, InventoryItem, InventoryPayload, InventoryStatus, User } from "./types";
+import type { DashboardSummary, InventoryItem, InventoryPayload, InventoryStatus, User, UserRole } from "./types";
 
 const statuses: InventoryStatus[] = ["Received", "IOL", "Missing", "Damaged", "Resolved", "Stowed"];
 const departments = ["Receive", "IOL"] as const;
@@ -37,6 +37,7 @@ export function App() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [selectedRole, setSelectedRole] = useState<UserRole>("worker");
   const [authError, setAuthError] = useState("");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -75,7 +76,7 @@ export function App() {
     event.preventDefault();
     setAuthError("");
     try {
-      const response = authMode === "login" ? await login(username, password) : await signup(username, password);
+      const response = authMode === "login" ? await login(username, password) : await signup(username, password, selectedRole || "worker");
       setToken(response.access_token);
       setCurrentUser(response.user);
       setTokenReady(true);
@@ -177,6 +178,15 @@ export function App() {
               Password
               <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete={authMode === "login" ? "current-password" : "new-password"} />
             </label>
+            {authMode === "signup" && (
+              <label>
+                Role
+                <select value={selectedRole} onChange={(event) => setSelectedRole(event.target.value as UserRole)}>
+                  <option value="worker">Worker</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </label>
+            )}
             {authError && <div className="error">{authError}</div>}
             <button className="primary-button" type="submit">{authMode === "login" ? "Sign in" : "Create account"}</button>
             <button
